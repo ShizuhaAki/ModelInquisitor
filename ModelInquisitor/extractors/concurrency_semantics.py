@@ -32,6 +32,7 @@ class ConcurrencySemanticsExtractor:
         for process in model.processes.values():
             claims.extend(self._parallel_claims(process))
             claims.extend(self._choice_claims(process))
+            claims.extend(self._inclusive_gateway_claims(process))
             claims.extend(self._event_based_loop_claims(process))
         claims.extend(self._communication_claims(model))
         return claims
@@ -235,6 +236,58 @@ class ConcurrencySemanticsExtractor:
                             metadata={"choice_gateway_id": gateway.id},
                         )
                     )
+        return claims
+
+    def _inclusive_gateway_claims(self, process: ProcessModel) -> list[Claim]:
+        claims: list[Claim] = []
+        for gateway in process.nodes.values():
+            successors = process.successors(gateway.id)
+            if gateway.type != "inclusiveGateway" or len(successors) < 2:
+                continue
+
+            join = find_join(process, successors)
+            branch_actions = self._unique(
+                node_id
+                for start in successors
+                if (node_id := self._first_observable_in_branch(process, start, join))
+            )
+
+            for branch_action in branch_actions:
+                claims.append(
+                    Claim(
+                        kind=ClaimKind.INCLUSIVE_BRANCH_REACHABILITY,
+                        process_id=process.id,
+                        node_id=gateway.id,
+                        branch_node_ids=(branch_action,),
+                        description=(
+                            f"Inclusive branch {branch_action} under {gateway.id} "
+                            "should remain reachable."
+                        ),
+                        metadata={
+                            "split_gateway_id": gateway.id,
+                            "join_node_id": join,
+                        },
+                    )
+                )
+
+            for left, right in combinations(branch_actions, 2):
+                claims.append(
+                    Claim(
+                        kind=ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE,
+                        process_id=process.id,
+                        node_id=gateway.id,
+                        branch_node_ids=(left, right),
+                        description=(
+                            f"Inclusive branches {left} and {right} under "
+                            f"{gateway.id} should be able to co-occur in "
+                            "one execution trace."
+                        ),
+                        metadata={
+                            "split_gateway_id": gateway.id,
+                            "join_node_id": join,
+                        },
+                    )
+                )
         return claims
 
     def _event_based_loop_claims(self, process: ProcessModel) -> list[Claim]:

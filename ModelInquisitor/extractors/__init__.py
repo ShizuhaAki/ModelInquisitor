@@ -15,6 +15,7 @@ from ModelInquisitor.extractors.subprocess_boundary import (
     BoundaryEventLifecycleExtractor,
     SubprocessExpansionExtractor,
 )
+from ModelInquisitor.extractors.terminate import TerminateCessationExtractor
 
 
 def extract_claims(model: BPMNModel) -> list[Claim]:
@@ -23,6 +24,7 @@ def extract_claims(model: BPMNModel) -> list[Claim]:
         DeadlockFreedomExtractor(),
         ActionPreservationExtractor(),
         EndEventPreservationExtractor(),
+        TerminateCessationExtractor(),
         CausalityExtractor(),
         MutexExtractor(),
         ExclusiveBranchReachabilityExtractor(),
@@ -46,5 +48,6 @@ __all__ = [
     "MutexExtractor",
     "NecessaryResponseExtractor",
     "SubprocessExpansionExtractor",
+    "TerminateCessationExtractor",
     "extract_claims",
 ]

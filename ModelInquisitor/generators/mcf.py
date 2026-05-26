@@ -69,6 +69,14 @@ class MCFGenerator:
             return self._subprocess_expansion_formula(claim, model)
         if claim.kind == ClaimKind.BOUNDARY_EVENT_LIFECYCLE:
             return self._boundary_event_lifecycle_formula(claim, model)
+        if claim.kind == ClaimKind.INCLUSIVE_BRANCH_REACHABILITY:
+            return self._branch_reachability_formula(claim, model)
+        if claim.kind == ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE:
+            return self._pair_co_occurrence_formula(claim, model)
+        if claim.kind == ClaimKind.TERMINATE_GLOBAL_CESSATION:
+            return self._terminate_global_cessation_formula(claim, model)
+        if claim.kind == ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE:
+            return self._pair_co_occurrence_formula(claim, model)
         raise ValueError(f"unsupported claim kind: {claim.kind}")
 
     def _deadlock_formula(self, claim: Claim, model: BPMNModel) -> str:
@@ -454,6 +462,54 @@ class MCFGenerator:
             f"% {claim.description}\n"
             "% Static check performed against the generated mCRL2 source.\n"
             "true"
+        )
+
+    def _pair_co_occurrence_formula(self, claim: Claim, model: BPMNModel) -> str:
+        if len(claim.branch_node_ids) != 2:
+            return "% Pair co-occurrence claim requires exactly two branch nodes.\nfalse"
+        actions = self._single_actions_for_nodes(model, claim.branch_node_ids)
+        if len(actions) < 2:
+            return "% Pair co-occurrence claim has unresolved actions.\nfalse"
+        left, right = actions[0], actions[1]
+        return (
+            f"% {claim.description}\n"
+            "% At least one trace should contain both actions in some ordering.\n"
+            f"{self._sequence_reachable((left, right))} ||\n"
+            f"{self._sequence_reachable((right, left))}"
+        )
+
+    def _terminate_global_cessation_formula(
+        self, claim: Claim, model: BPMNModel
+    ) -> str:
+        terminate_actions = self._actions_for_node(model, claim.node_id)
+        other_actions_raw = self._actions_for_nodes(model, claim.branch_node_ids)
+        if not terminate_actions:
+            return "% Terminate cessation claim has unresolved terminate action.\nfalse"
+
+        terminate_set = set(terminate_actions)
+        other_actions = tuple(
+            action
+            for action in dict.fromkeys(other_actions_raw)
+            if action not in terminate_set
+        )
+        if not other_actions:
+            return "% Terminate cessation claim has no other observable actions to check.\nfalse"
+
+        parts = [
+            self._forbid_action_after(term, other)
+            for term in terminate_actions
+            for other in other_actions
+        ]
+        return (
+            f"% {claim.description}\n"
+            "% After a terminate end event fires, no other observable action should occur.\n"
+            + " &&\n".join(parts)
+        )
+
+    def _forbid_action_after(self, boundary: str, later: str) -> str:
+        return (
+            f"[true* . ({self._action_formula(boundary)}) . "
+            f"true* . ({self._action_formula(later)})]false"
         )
 
     def _message_flow_for_claim(self, claim: Claim, model: BPMNModel):

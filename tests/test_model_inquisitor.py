@@ -1167,3 +1167,258 @@ def test_mcrl2_traces_empty_trace_via_tau_to_terminal():
     extractor = TraceExtractor(ThirdPartyBpmn2Mcrl2Strategy())
     traces = extractor.mcrl2_traces(lts, claim_actions)
     assert () in traces
+
+
+def test_inclusive_gateway_branch_reachability_claims_each_branch():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:inclusiveGateway id="Split" />
+    <bpmn:task id="A" name="A" />
+    <bpmn:task id="B" name="B" />
+    <bpmn:inclusiveGateway id="Join" />
+    <bpmn:endEvent id="End" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Split" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Split" targetRef="A" />
+    <bpmn:sequenceFlow id="F3" sourceRef="Split" targetRef="B" />
+    <bpmn:sequenceFlow id="F4" sourceRef="A" targetRef="Join" />
+    <bpmn:sequenceFlow id="F5" sourceRef="B" targetRef="Join" />
+    <bpmn:sequenceFlow id="F6" sourceRef="Join" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    strategy = ThirdPartyBpmn2Mcrl2Strategy()
+    strategy.prepare(model)
+    generator = MCFGenerator(strategy)
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.INCLUSIVE_BRANCH_REACHABILITY
+    ]
+
+    assert [claim.branch_node_ids for claim in claims] == [("A",), ("B",)]
+    formulas = [generator.generate(claim, model) for claim in claims]
+    assert any("a(oid)" in formula for formula in formulas)
+    assert any("b(oid)" in formula for formula in formulas)
+
+
+def test_inclusive_gateway_branch_co_occurrence_claims():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:inclusiveGateway id="Split" />
+    <bpmn:task id="A" name="A" />
+    <bpmn:task id="B" name="B" />
+    <bpmn:inclusiveGateway id="Join" />
+    <bpmn:endEvent id="End" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Split" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Split" targetRef="A" />
+    <bpmn:sequenceFlow id="F3" sourceRef="Split" targetRef="B" />
+    <bpmn:sequenceFlow id="F4" sourceRef="A" targetRef="Join" />
+    <bpmn:sequenceFlow id="F5" sourceRef="B" targetRef="Join" />
+    <bpmn:sequenceFlow id="F6" sourceRef="Join" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    strategy = ThirdPartyBpmn2Mcrl2Strategy()
+    strategy.prepare(model)
+    generator = MCFGenerator(strategy)
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE
+    ]
+
+    assert len(claims) == 1
+    assert claims[0].branch_node_ids == ("A", "B")
+    formula = generator.generate(claims[0], model)
+    assert "a(oid)" in formula
+    assert "b(oid)" in formula
+    assert "||" in formula
+
+
+def test_inclusive_gateway_three_branches_generates_pair_claims():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:inclusiveGateway id="Split" />
+    <bpmn:task id="A" name="A" />
+    <bpmn:task id="B" name="B" />
+    <bpmn:task id="C" name="C" />
+    <bpmn:inclusiveGateway id="Join" />
+    <bpmn:endEvent id="End" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Split" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Split" targetRef="A" />
+    <bpmn:sequenceFlow id="F3" sourceRef="Split" targetRef="B" />
+    <bpmn:sequenceFlow id="F4" sourceRef="Split" targetRef="C" />
+    <bpmn:sequenceFlow id="F5" sourceRef="A" targetRef="Join" />
+    <bpmn:sequenceFlow id="F6" sourceRef="B" targetRef="Join" />
+    <bpmn:sequenceFlow id="F7" sourceRef="C" targetRef="Join" />
+    <bpmn:sequenceFlow id="F8" sourceRef="Join" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE
+    ]
+    assert len(claims) == 3
+    pairs = {claim.branch_node_ids for claim in claims}
+    assert pairs == {("A", "B"), ("A", "C"), ("B", "C")}
+
+
+def test_terminate_end_event_claim_forbids_other_actions_after():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:task id="TaskA" name="Task A" />
+    <bpmn:endEvent id="TermEnd" name="Terminated">
+      <bpmn:terminateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="TaskA" />
+    <bpmn:sequenceFlow id="F2" sourceRef="TaskA" targetRef="TermEnd" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    strategy = ThirdPartyBpmn2Mcrl2Strategy()
+    strategy.prepare(model)
+    generator = MCFGenerator(strategy)
+
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.TERMINATE_GLOBAL_CESSATION
+    ]
+
+    assert len(claims) == 1
+    assert claims[0].node_id == "TermEnd"
+    assert "TaskA" in claims[0].branch_node_ids
+
+    formula = generator.generate(claims[0], model)
+    assert "terminated" in formula
+    assert "task_a" in formula
+    assert "[true*" in formula
+    assert "]false" in formula
+
+
+def test_terminate_end_event_in_parallel_process_forbids_concurrent_actions():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:parallelGateway id="Split" />
+    <bpmn:task id="A" name="A" />
+    <bpmn:endEvent id="TermEnd" name="Terminated">
+      <bpmn:terminateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:task id="B" name="B" />
+    <bpmn:endEvent id="NormalEnd" name="Done" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Split" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Split" targetRef="A" />
+    <bpmn:sequenceFlow id="F3" sourceRef="A" targetRef="TermEnd" />
+    <bpmn:sequenceFlow id="F4" sourceRef="Split" targetRef="B" />
+    <bpmn:sequenceFlow id="F5" sourceRef="B" targetRef="NormalEnd" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    strategy = ThirdPartyBpmn2Mcrl2Strategy()
+    strategy.prepare(model)
+    generator = MCFGenerator(strategy)
+
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.TERMINATE_GLOBAL_CESSATION
+    ]
+    assert len(claims) == 1
+    claim = claims[0]
+    assert "A" in claim.branch_node_ids
+    assert "B" in claim.branch_node_ids
+    assert "NormalEnd" in claim.branch_node_ids
+    assert "TermEnd" not in claim.branch_node_ids
+
+    formula = generator.generate(claim, model)
+    assert "b(oid)" in formula
+    assert "done(oid)" in formula
+    assert "&&" in formula
+
+
+def test_non_interrupting_boundary_co_occurrence_handler_and_normal():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:task id="OriginalTask" name="Original" />
+    <bpmn:task id="NormalTask" name="Normal" />
+    <bpmn:boundaryEvent id="TimeoutBoundary" name="Timeout" attachedToRef="OriginalTask" cancelActivity="false">
+      <bpmn:timerEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:task id="RecoveryTask" name="Recover" />
+    <bpmn:endEvent id="End" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="OriginalTask" />
+    <bpmn:sequenceFlow id="F2" sourceRef="OriginalTask" targetRef="NormalTask" />
+    <bpmn:sequenceFlow id="F3" sourceRef="NormalTask" targetRef="End" />
+    <bpmn:sequenceFlow id="F4" sourceRef="TimeoutBoundary" targetRef="RecoveryTask" />
+    <bpmn:sequenceFlow id="F5" sourceRef="RecoveryTask" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    strategy = ThirdPartyBpmn2Mcrl2Strategy()
+    strategy.prepare(model)
+    generator = MCFGenerator(strategy)
+
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE
+    ]
+
+    assert len(claims) == 1
+    claim = claims[0]
+    assert claim.node_id == "TimeoutBoundary"
+    assert claim.branch_node_ids == ("RecoveryTask", "NormalTask")
+
+    formula = generator.generate(claim, model)
+    assert "recover(oid)" in formula
+    assert "normal(oid)" in formula
+    assert "||" in formula
+
+
+def test_interrupting_boundary_event_skips_co_occurrence():
+    model = parse_inline_bpmn(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:task id="OriginalTask" name="Original" />
+    <bpmn:task id="NormalTask" name="Normal" />
+    <bpmn:boundaryEvent id="TimeoutBoundary" name="Timeout" attachedToRef="OriginalTask" cancelActivity="true">
+      <bpmn:timerEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:task id="RecoveryTask" name="Recover" />
+    <bpmn:endEvent id="End" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="OriginalTask" />
+    <bpmn:sequenceFlow id="F2" sourceRef="OriginalTask" targetRef="NormalTask" />
+    <bpmn:sequenceFlow id="F3" sourceRef="NormalTask" targetRef="End" />
+    <bpmn:sequenceFlow id="F4" sourceRef="TimeoutBoundary" targetRef="RecoveryTask" />
+    <bpmn:sequenceFlow id="F5" sourceRef="RecoveryTask" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>
+""",
+    )
+    claims = [
+        claim for claim in extract_claims(model)
+        if claim.kind == ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE
+    ]
+    assert len(claims) == 0

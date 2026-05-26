@@ -81,6 +81,26 @@ class BoundaryEventLifecycleExtractor:
                         },
                     )
                 )
+                if not boundary.cancel_activity and normal_node_ids and handler:
+                    claims.append(
+                        Claim(
+                            kind=ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE,
+                            process_id=process.id,
+                            node_id=boundary.id,
+                            branch_node_ids=(handler, normal_node_ids[0]),
+                            description=(
+                                f"Non-interrupting boundary {boundary.id}: handler "
+                                f"{handler} and normal continuation "
+                                f"{normal_node_ids[0]} should be able to co-occur "
+                                "in one execution trace."
+                            ),
+                            metadata={
+                                "attached_to": boundary.attached_to,
+                                "handler_node_id": handler,
+                                "normal_continuation_node_id": normal_node_ids[0],
+                            },
+                        )
+                    )
         return claims
 
     def _first_observable_in_successors(

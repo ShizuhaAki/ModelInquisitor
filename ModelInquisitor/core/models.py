@@ -47,6 +47,14 @@ class ClaimKind(str, Enum):
         "soundness::subprocess_expansion_preservation"
     )
     BOUNDARY_EVENT_LIFECYCLE = "flow::boundary_event_lifecycle"
+    INCLUSIVE_BRANCH_REACHABILITY = "flow::inclusive_branch_reachability"
+    INCLUSIVE_BRANCH_CO_OCCURRENCE = (
+        "concurrency::inclusive_branch_co_occurrence"
+    )
+    TERMINATE_GLOBAL_CESSATION = "soundness::terminate_global_cessation"
+    NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE = (
+        "flow::non_interrupting_boundary_co_occurrence"
+    )
 
 
 @dataclass(frozen=True)

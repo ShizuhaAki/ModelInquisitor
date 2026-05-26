@@ -109,6 +109,28 @@ def explain_claim(claim: Claim) -> str:
             f"Boundary event {claim.node_id} should reach handler {claim.target_node_id} "
             f"and respect {mode} continuation semantics for {claim.metadata.get('attached_to')}."
         )
+    if claim.kind == ClaimKind.INCLUSIVE_BRANCH_REACHABILITY:
+        branches = ", ".join(claim.branch_node_ids)
+        return (
+            f"Inclusive gateway {claim.node_id} should keep each selectable branch "
+            f"individually reachable ({branches})."
+        )
+    if claim.kind == ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE:
+        branches = " and ".join(claim.branch_node_ids)
+        return (
+            f"Branches {branches} under inclusive gateway {claim.node_id} should be "
+            "able to co-occur in one execution trace."
+        )
+    if claim.kind == ClaimKind.TERMINATE_GLOBAL_CESSATION:
+        return (
+            f"After terminate end event {claim.node_id} fires, no other observable "
+            "action in the process should be reachable."
+        )
+    if claim.kind == ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE:
+        return (
+            f"Non-interrupting boundary event {claim.node_id} should allow both its "
+            "handler and the normal continuation to appear in the same trace."
+        )
     return claim.description or "Unnamed claim."
 
 
@@ -139,6 +161,14 @@ def short_claim_text(claim: Claim) -> str:
         return f"{claim.node_id} expands internal actions"
     if claim.kind == ClaimKind.BOUNDARY_EVENT_LIFECYCLE:
         return f"{claim.node_id} reaches {claim.target_node_id}"
+    if claim.kind == ClaimKind.INCLUSIVE_BRANCH_REACHABILITY:
+        return f"{' / '.join(claim.branch_node_ids)} branch remains reachable"
+    if claim.kind == ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE:
+        return f"{' / '.join(claim.branch_node_ids)} can co-occur"
+    if claim.kind == ClaimKind.TERMINATE_GLOBAL_CESSATION:
+        return f"{claim.node_id} terminates all activity"
+    if claim.kind == ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE:
+        return f"{' / '.join(claim.branch_node_ids)} co-occur with handler"
     return claim.description or claim.kind.value
 
 
@@ -231,6 +261,18 @@ def render_claim_explanations(console: Console, results: list[VerificationResult
         elif kind == ClaimKind.BOUNDARY_EVENT_LIFECYCLE:
             boundaries = ", ".join(result.claim.node_id or "unknown" for result in group)
             lines.append(f"[bold]Boundary lifecycle[/bold]: boundary events should route to handlers and preserve cancellation semantics ({boundaries}).")
+        elif kind == ClaimKind.INCLUSIVE_BRANCH_REACHABILITY:
+            gateways = ", ".join(result.claim.node_id or "unknown" for result in group)
+            lines.append(f"[bold]Inclusive branch reachability[/bold]: every inclusive branch should remain individually selectable ({gateways}).")
+        elif kind == ClaimKind.INCLUSIVE_BRANCH_CO_OCCURRENCE:
+            gateways = ", ".join(result.claim.node_id or "unknown" for result in group)
+            lines.append(f"[bold]Inclusive branch co-occurrence[/bold]: pair of inclusive branches should be able to co-occur in one trace ({gateways}).")
+        elif kind == ClaimKind.TERMINATE_GLOBAL_CESSATION:
+            nodes = ", ".join(result.claim.node_id or "unknown" for result in group)
+            lines.append(f"[bold]Terminate global cessation[/bold]: after a terminate end event fires, no other observable action should occur ({nodes}).")
+        elif kind == ClaimKind.NON_INTERRUPTING_BOUNDARY_CO_OCCURRENCE:
+            boundaries = ", ".join(result.claim.node_id or "unknown" for result in group)
+            lines.append(f"[bold]Non-interrupting boundary co-occurrence[/bold]: handler and normal continuation should be able to co-occur ({boundaries}).")
         else:
             lines.append(f"[bold]{kind.value}[/bold]: {len(group)} claim(s).")
 

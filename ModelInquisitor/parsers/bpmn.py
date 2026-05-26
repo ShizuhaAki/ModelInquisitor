@@ -30,6 +30,7 @@ FLOW_NODE_TYPES = TASK_NODE_TYPES | {
     "parallelGateway",
     "exclusiveGateway",
     "eventBasedGateway",
+    "inclusiveGateway",
     "subProcess",
     "boundaryEvent",
     "intermediateCatchEvent",
@@ -43,6 +44,7 @@ EVENT_DEFINITION_TYPES = {
     "messageEventDefinition",
     "signalEventDefinition",
     "errorEventDefinition",
+    "terminateEventDefinition",
 }
 
 
