@@ -61,3 +61,25 @@ Exit codes:
 - `1`: at least one Claim was verified as false.
 - `2`: an input file was missing.
 - `3`: model conversion, formula generation, or solving failed.
+
+### Auxiliary trace comparison
+
+Trace comparison is available as an auxiliary diagnostic check, but it is not the primary verification method. The main verification path is still Claim extraction and modal mu-calculus checking through `main.py`.
+
+Run bounded per-process trace comparison with:
+
+```powershell
+uv run python trace_main.py tests/input/spec.bpmn tests/input/spec.mcrl2
+```
+
+The trace runner compares BPMN traces with traces extracted from the translated mCRL2 LTS. It is useful for inspecting behavioral differences and debugging suspicious Claim results, especially with:
+
+```powershell
+uv run python trace_main.py tests/input/spec.bpmn tests/input/spec.mcrl2 --work-dir .verify-artifacts --max-trace-length 50 --max-trace-count 1000 --show-traces
+```
+
+The trace runner uses the mCRL2 LTS toolchain:
+
+```text
+mcrl22lps -> lps2lts
+```
